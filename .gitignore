@@ -1,0 +1,27 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+
+# Build outputs
+build/
+dist/
+
+# Temp files
+temp/
+.env
+secret.json
+
+TechEndeavor.md
