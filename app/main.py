@@ -22,7 +22,7 @@ origins = [
     "http://localhost",
     "http://localhost:5173",  # Vite default
     "http://127.0.0.1:5173",
-    "https://tech-endeavor.vercel.app",
+    "https://tech-endeavor-react.vercel.app",
 ]
 
 app.add_middleware(
