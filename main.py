@@ -4,9 +4,17 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
+import os
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 from app import crud, models, schemas, auth
 from app.database import engine, get_db
+
+# Load environment variables
+load_dotenv()
 
 # Create tables
 models.Base.metadata.create_all(bind=engine)
@@ -88,6 +96,77 @@ def create_blog(
     current_user: models.User = Depends(auth.get_current_user),
 ):
     return crud.create_blog(db=db, blog=blog, user_id=current_user.id)
+
+
+@app.post("/blogs/enhance", response_model=schemas.BlogEnhanceResponse)
+async def enhance_blog(
+    request: schemas.BlogEnhanceRequest,
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    try:
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not set in environment")
+
+        llm = ChatOpenAI(
+            api_key=openai_api_key,
+            openai_api_base=os.getenv("BASE_URL"),
+            model=os.getenv("MODEL"),
+            temperature=0.7,
+        )
+
+        # Enhance Title
+        title_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a professional blog editor. Your task is to enhance the title of a blog post to make it more engaging and catchy, without changing its original meaning. Title should be just Text and no markdown syntax should be introduced."),
+            ("user", "{title}")
+        ])
+        title_chain = title_prompt | llm | StrOutputParser()
+        enhanced_title = await title_chain.ainvoke({"title": request.title})
+
+        # Enhance Content
+        content_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a professional blog editor. Your task is to enhance the content of a blog post to make it more professional, readable, and engaging. DO NOT change the original meaning or intent of the content.Ensure the flow of the content is more smooth. Resturcture it and rephrase it to make it more effective. Keep the markdown formatting if present."),
+            ("user", "{content}")
+        ])
+        content_chain = content_prompt | llm | StrOutputParser()
+        enhanced_content = await content_chain.ainvoke({"content": request.content})
+
+        return schemas.BlogEnhanceResponse(
+            title=enhanced_title.strip().strip('"'),
+            content=enhanced_content.strip()
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI Enhancement failed: {str(e)}")
+
+
+@app.put("/blogs/{blog_id}", response_model=schemas.Blog)
+def update_blog(
+    blog_id: int,
+    blog: schemas.BlogUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    db_blog = crud.get_blog(db, blog_id=blog_id)
+    if db_blog is None:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    if db_blog.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this blog")
+    return crud.update_blog(db=db, db_blog=db_blog, blog=blog)
+
+
+@app.delete("/blogs/{blog_id}")
+def delete_blog(
+    blog_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    db_blog = crud.get_blog(db, blog_id=blog_id)
+    if db_blog is None:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    if db_blog.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this blog")
+    crud.delete_blog(db=db, db_blog=db_blog)
+    return {"detail": "Blog deleted successfully"}
 
 
 @app.get("/")

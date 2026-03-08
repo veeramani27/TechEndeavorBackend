@@ -42,3 +42,16 @@ def create_blog(db: Session, blog: schemas.BlogCreate, user_id: int):
     db.commit()
     db.refresh(db_blog)
     return db_blog
+
+def update_blog(db: Session, db_blog: models.Blog, blog: schemas.BlogUpdate):
+    blog_data = blog.dict(exclude_unset=True)
+    for key, value in blog_data.items():
+        setattr(db_blog, key, value)
+    db.commit()
+    db.refresh(db_blog)
+    return db_blog
+
+def delete_blog(db: Session, db_blog: models.Blog):
+    db.delete(db_blog)
+    db.commit()
+    return db_blog
