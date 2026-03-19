@@ -1,7 +1,10 @@
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text, DateTime
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+
 from .database import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -13,6 +16,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
 
     blogs = relationship("Blog", back_populates="author")
+
 
 class Blog(Base):
     __tablename__ = "blogs"
