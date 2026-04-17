@@ -34,7 +34,7 @@ app.add_middleware(
 
 llm=None
 
-def get_llm_instance(openai_api_key=os.getenv("OPENAI_API_KEY")):
+def get_llm_instance(llm_api_key=os.getenv("CEREBRAS_API_KEY")):
     global llm
     if(llm):
         return llm
@@ -42,9 +42,9 @@ def get_llm_instance(openai_api_key=os.getenv("OPENAI_API_KEY")):
     from langchain_openai import ChatOpenAI
 
     llm = ChatOpenAI(
-        api_key=openai_api_key,
-        openai_api_base=os.getenv("BASE_URL"),
-        model=os.getenv("MODEL"),
+        api_key=llm_api_key,
+        openai_api_base=os.getenv("CEREBRAS_BASE_URL"),
+        model=os.getenv("CEREBRAS_MODEL"),
         temperature=0.7,
     )
     return llm
@@ -127,13 +127,13 @@ async def enhance_blog(
         from langchain_core.output_parsers import StrOutputParser
         from langchain_core.prompts import ChatPromptTemplate
 
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
+        llm_api_key = os.getenv("CEREBRAS_API_KEY")
+        if not llm_api_key:
             raise HTTPException(
-                status_code=500, detail="OPENAI_API_KEY not set in environment"
+                status_code=500, detail="LLM_API_KEY not set in environment"
             )
 
-        llm = get_llm_instance(openai_api_key)
+        llm = get_llm_instance(llm_api_key)
 
         # Enhance Title
         title_prompt = ChatPromptTemplate.from_messages(

@@ -76,4 +76,4 @@ def update_blog(db: Session, db_blog: models.Blog, blog: schemas.BlogUpdate):
 
 
 def get_blog_titles(db: Session):
-    return [title[0] for title in db.query(models.Blog.title).all()]
+    return [title[0] for title in db.query(models.Blog.title).order_by(models.Blog.created_at).all()]
