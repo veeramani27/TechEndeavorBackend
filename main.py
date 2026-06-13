@@ -3,7 +3,7 @@ from datetime import timedelta
 from typing import List
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Response, Request, Cookie
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -26,7 +26,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,6 +52,7 @@ def get_llm_instance(llm_api_key=os.getenv("CEREBRAS_API_KEY")):
 
 @app.post("/token", response_model=schemas.Token)
 async def login_for_access_token(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
     user = crud.get_user_by_username(db, username=form_data.username)
@@ -65,7 +66,55 @@ async def login_for_access_token(
     access_token = auth.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    
+    refresh_token_expires = timedelta(days=auth.REFRESH_TOKEN_EXPIRE_DAYS)
+    refresh_token = auth.create_refresh_token(
+        data={"sub": user.username}, expires_delta=refresh_token_expires
+    )
+    
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        max_age=auth.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        expires=auth.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        samesite="lax",
+        secure=False,
+    )
+    
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/refresh", response_model=schemas.Token)
+async def refresh_access_token(
+    response: Response,
+    refresh_token: str | None = Cookie(None), db: Session = Depends(get_db)
+):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not refresh_token:
+        raise credentials_exception
+        
+    token_data = auth.verify_refresh_token(refresh_token, credentials_exception)
+    user = crud.get_user_by_username(db, username=token_data.username)
+    if not user:
+        raise credentials_exception
+        
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/logout")
+def logout(response: Response):
+    response.delete_cookie("refresh_token")
+    return {"message": "Logged out successfully"}
 
 
 @app.post("/users/", response_model=schemas.User)
@@ -85,6 +134,8 @@ async def read_users_me(current_user: models.User = Depends(auth.get_current_use
 def read_blogs(page: int = 1, limit: int = 25, db: Session = Depends(get_db)):
     skip = (page - 1) * limit
     blogs = crud.get_blogs(db, skip=skip, limit=limit)
+    for blog in blogs:
+        blog.content=blog.content[:500]
     total_count = crud.get_blogs_count(db)
     total_pages = (total_count + limit - 1) // limit
     return {
